@@ -16,9 +16,35 @@ source "$PY_RELEASE_ROOT/lib/common.sh"
 source "$SCRIPT_DIR/lib/brew_utils.sh"
 
 # Parse arguments
-PACKAGE_NAME=${1:-$(get_package_name)}
-VERSION=${2:-$(get_package_version)}
-FORCE=${3:-false}
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --version=*)
+        VERSION="${1#*=}"
+        shift
+        ;;
+    --package-name=*)
+        PACKAGE_NAME="${1#*=}"
+        shift
+        ;;
+    --force)
+        FORCE=1
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+done
+
+# Use defaults if not provided
+if [ -z "$PACKAGE_NAME" ]; then
+    PACKAGE_NAME=$(get_package_name)
+fi
+
+if [ -z "$VERSION" ]; then
+    VERSION=$(get_package_version)
+fi
 
 # Validate arguments
 if [ -z "$PACKAGE_NAME" ]; then

@@ -1,6 +1,6 @@
 #!/bin/bash
 # Publish script for Homebrew formula
-# Commits the formula to the repository
+# Updates the formula in the releasee-test branch
 
 set -e
 
@@ -16,9 +16,35 @@ source "$PY_RELEASE_ROOT/lib/common.sh"
 source "$SCRIPT_DIR/lib/brew_utils.sh"
 
 # Parse arguments
-PACKAGE_NAME=${1:-$(get_package_name)}
-VERSION=${2:-$(get_package_version)}
-FORCE=${3:-false}
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --version=*)
+        VERSION="${1#*=}"
+        shift
+        ;;
+    --package-name=*)
+        PACKAGE_NAME="${1#*=}"
+        shift
+        ;;
+    --force)
+        FORCE=1
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+done
+
+# Use defaults if not provided
+if [ -z "$PACKAGE_NAME" ]; then
+    PACKAGE_NAME=$(get_package_name)
+fi
+
+if [ -z "$VERSION" ]; then
+    VERSION=$(get_package_version)
+fi
 
 # Validate arguments
 if [ -z "$PACKAGE_NAME" ]; then
@@ -31,34 +57,51 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
+# Check if formula exists
 FORMULA_PATH="$REPO_ROOT/Formula/$PACKAGE_NAME.rb"
-
-# Check if the formula exists
 if [ ! -f "$FORMULA_PATH" ]; then
-    error "Formula file not found at $FORMULA_PATH"
+    error "Formula not found at $FORMULA_PATH"
     exit 1
 fi
 
 log "Publishing formula for $PACKAGE_NAME version $VERSION..."
 
-# Change to repository root for git operations
+# Change to repository root
 cd "$REPO_ROOT"
 
-# Check if there are changes
-if ! git diff --quiet "Formula/$PACKAGE_NAME.rb"; then
-    # Commit changes
-    git add "Formula/$PACKAGE_NAME.rb"
-    git commit -m "Update Homebrew formula for $PACKAGE_NAME to version $VERSION"
-    log "Changes committed successfully"
-    log "To push changes, run: git push"
+# Create and switch to releasee-test branch if it doesn't exist
+if ! git rev-parse --verify releasee-test >/dev/null 2>&1; then
+    log "Creating releasee-test branch..."
+    git checkout -b releasee-test
 else
-    if [ "$FORCE" = "true" ]; then
-        log "Force update requested. Committing anyway..."
-        git add "Formula/$PACKAGE_NAME.rb"
-        git commit -m "Update Homebrew formula for $PACKAGE_NAME to version $VERSION (forced)"
-        log "Changes committed successfully"
-        log "To push changes, run: git push"
-    else
-        log "No changes to Homebrew formula, skipping commit"
-    fi
+    log "Switching to releasee-test branch..."
+    git checkout releasee-test
 fi
+
+# Create Formula directory if it doesn't exist
+mkdir -p Formula
+
+# Copy the formula if it's not already in place
+if [ ! -f "Formula/$PACKAGE_NAME.rb" ] || [ "$FORCE" = "1" ]; then
+    log "Copying formula..."
+    cp "$FORMULA_PATH" "Formula/$PACKAGE_NAME.rb"
+fi
+
+# Check for changes
+if ! git diff --quiet "Formula/$PACKAGE_NAME.rb"; then
+    log "Changes detected, committing..."
+    git add "Formula/$PACKAGE_NAME.rb"
+    git commit -m "Update $PACKAGE_NAME formula to version $VERSION"
+
+    log "Pushing changes..."
+    if git remote | grep -q '^origin$'; then
+        git push origin releasee-test
+    else
+        log "No remote 'origin' found. Changes are committed but not pushed."
+        log "To push changes manually, run: git push origin releasee-test"
+    fi
+else
+    log "No changes detected in the formula"
+fi
+
+log "Formula published successfully"
