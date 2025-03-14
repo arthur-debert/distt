@@ -2,15 +2,15 @@
 """
 PyPI to Homebrew Formula Generator
 
-This script generates a Homebrew formula for a PyPI package. It creates a temporary
-directory, sets up a virtual environment, installs the package, and then uses the
-package metadata to generate a Homebrew formula.
+This script generates a Homebrew formula for a PyPI package. It creates a
+temporary directory, sets up a virtual environment, installs the package,
+and then uses the package metadata to generate a Homebrew formula.
 
 Usage:
-    package-managers/brew/pypi-to-brew <package_name>
+    py-release/brew/lib/pypi-to-brew <package_name> --output-dir=<dir>
 
 Example:
-    package-managers/brew/pypi-to-brew nanodoc
+    py-release/brew/lib/pypi-to-brew nanodoc --output-dir=Formula
 """
 
 import argparse
@@ -23,7 +23,7 @@ import sys
 import tempfile
 import urllib.request
 from pathlib import Path
-from typing import Dict, Optional
+from typing import Dict
 
 import jinja2
 
@@ -82,7 +82,7 @@ def get_package_metadata(venv_path: str, package_name: str) -> Dict[str, str]:
     """Get the package metadata using the about-py-package script."""
     python_path = os.path.join(venv_path, "bin", "python")
     script_dir = Path(__file__).parent
-    about_py_package = str(script_dir.parent / "common" / "about-py-package")
+    about_py_package = str(script_dir.parent.parent / "lib" / "about-py-package")
 
     metadata = {}
 
@@ -149,11 +149,8 @@ def get_license_from_file(license_file_path: str = "../common/LICENSE") -> str:
         with open(license_file_path, "r") as f:
             content = f.read()
             # Extract license type from the first few lines
-            match = re.search(
-                r"(MIT|Apache|GPL|BSD|MPL|LGPL|EPL|CDDL|CPL)\s+License",
-                content,
-                re.IGNORECASE,
-            )
+            pattern = r"(MIT|Apache|GPL|BSD|MPL|LGPL|EPL|CDDL|CPL)\s+License"
+            match = re.search(pattern, content, re.IGNORECASE)
             if match:
                 return match.group(1)
     except Exception:
@@ -163,7 +160,8 @@ def get_license_from_file(license_file_path: str = "../common/LICENSE") -> str:
 
 def get_package_url(package_name: str, version: str) -> str:
     """Get the URL for the package source."""
-    return f"https://files.pythonhosted.org/packages/source/{package_name[0]}/{package_name}/{package_name}-{version}.tar.gz"
+    base = "https://files.pythonhosted.org/packages/source"
+    return f"{base}/{package_name[0]}/{package_name}/{package_name}-{version}.tar.gz"
 
 
 def calculate_sha256(url: str) -> str:
@@ -188,8 +186,8 @@ def generate_formula(metadata: Dict[str, str], sha256: str, executable: str) -> 
     template = jinja2.Template(FORMULA_TEMPLATE)
 
     # Try to get license from LICENSE file first
-    script_dir = Path(__file__).parent.parent
-    license_file = script_dir / "common" / "LICENSE"
+    script_dir = Path(__file__).parent.parent.parent
+    license_file = script_dir / "lib" / "LICENSE"
     if license_file.exists():
         license_text = get_license_from_file(str(license_file))
     else:
@@ -219,10 +217,7 @@ def main():
         description="Generate a Homebrew formula for a PyPI package"
     )
     parser.add_argument("package_name", help="The name of the PyPI package")
-    parser.add_argument(
-        "--output-dir",
-        help="Directory to save the formula to (default: Formula directory)",
-    )
+    parser.add_argument("--output-dir", help="Directory to save the formula to")
     args = parser.parse_args()
 
     package_name = args.package_name
@@ -253,25 +248,17 @@ def main():
         formula = generate_formula(metadata, sha256, executable)
 
         # Output the formula
-        print(formula)
-
-        # Save the formula to a file
         if args.output_dir:
             output_dir = args.output_dir
+            # Create the output directory if it doesn't exist
+            os.makedirs(output_dir, exist_ok=True)
+            # Save the formula to a file
+            formula_path = os.path.join(output_dir, f"{package_name}.rb")
+            with open(formula_path, "w") as f:
+                f.write(formula)
+            print(f"Formula saved to {formula_path}")
         else:
-            # Default to the Formula directory in the same directory as this script
-            script_dir = os.path.dirname(os.path.abspath(__file__))
-            output_dir = os.path.join(script_dir, "Formula")
-
-        # Create the output directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
-
-        # Save the formula to a file
-        formula_path = os.path.join(output_dir, f"{package_name}.rb")
-        with open(formula_path, "w") as f:
-            f.write(formula)
-
-        print(f"Formula saved to {formula_path}")
+            print(formula)
 
     finally:
         # Clean up the temporary directory
@@ -279,4 +266,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main() 

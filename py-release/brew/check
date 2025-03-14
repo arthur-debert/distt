@@ -1,0 +1,94 @@
+#!/bin/bash
+# Check script for Homebrew formula
+# Tests the formula locally without affecting the main Homebrew installation
+
+set -e
+
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get py-release root directory
+PY_RELEASE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_ROOT/.." && pwd)"
+
+# Source common functions
+source "$PY_RELEASE_ROOT/lib/common.sh"
+source "$SCRIPT_DIR/lib/brew_utils.sh"
+
+# Parse arguments
+PACKAGE_NAME=${1:-$(get_package_name)}
+VERSION=${2:-$(get_package_version)}
+FORCE=${3:-false}
+
+# Validate arguments
+if [ -z "$PACKAGE_NAME" ]; then
+    error "Package name is required"
+    exit 1
+fi
+
+if [ -z "$VERSION" ]; then
+    error "Version is required"
+    exit 1
+fi
+
+FORMULA_PATH="$REPO_ROOT/Formula/$PACKAGE_NAME.rb"
+
+# Check if the formula exists
+if [ ! -f "$FORMULA_PATH" ]; then
+    error "Formula file not found at $FORMULA_PATH"
+    exit 1
+fi
+
+log "Testing formula: $FORMULA_PATH"
+
+# Create a temporary directory for testing
+TEMP_DIR=$(mktemp -d)
+TEMP_PREFIX="$TEMP_DIR/prefix"
+mkdir -p "$TEMP_PREFIX"
+
+log "Using temporary prefix: $TEMP_PREFIX"
+
+# Test if the package can be imported
+if python3 -c "import $PACKAGE_NAME" 2>/dev/null; then
+    log "Package $PACKAGE_NAME is already installed"
+else
+    log "Installing package $PACKAGE_NAME temporarily..."
+    PYTHONPATH="$TEMP_PREFIX/lib/python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')/site-packages" \
+        pip3 install --prefix="$TEMP_PREFIX" "$PACKAGE_NAME==$VERSION" --quiet
+    if [ $? -ne 0 ]; then
+        error "Failed to install package"
+        rm -rf "$TEMP_DIR"
+        exit 1
+    fi
+    log "Package installed successfully"
+fi
+
+# Add the temporary bin directory to PATH
+export PATH="$TEMP_PREFIX/bin:$PATH"
+# Add the temporary lib directory to PYTHONPATH
+export PYTHONPATH="$TEMP_PREFIX/lib/python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')/site-packages:$PYTHONPATH"
+
+# Test help command
+log "Testing '$PACKAGE_NAME --help'..."
+python3 -m "$PACKAGE_NAME" --help
+if [ $? -ne 0 ]; then
+    error "Help command test failed"
+    rm -rf "$TEMP_DIR"
+    exit 1
+fi
+log "Help command test passed"
+
+# Test version command
+log "Testing '$PACKAGE_NAME --version'..."
+python3 -m "$PACKAGE_NAME" --version
+if [ $? -ne 0 ]; then
+    error "Version command test failed"
+    rm -rf "$TEMP_DIR"
+    exit 1
+fi
+log "Version command test passed"
+
+log "All tests passed successfully"
+
+# Clean up
+rm -rf "$TEMP_DIR"

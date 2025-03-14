@@ -1,10 +1,10 @@
 PY-RELEASE
 
 A drop-in solution for managing Python package releases across multiple platforms:
-- PyPI releases
-- GitHub releases
-- APT packages
-- Homebrew formulas
+- ✅ GitHub releases (tested and working)
+- ✅ PyPI releases (tested and working)
+- 🚧 APT packages (not implemented)
+- 🚧 Homebrew formulas (in progress)
 
 Supports both local execution and GitHub Actions workflows.
 
@@ -18,8 +18,12 @@ Supports both local execution and GitHub Actions workflows.
 
 2.1 Release Targets
     There are two distinct target types:
-    - Push targets (github, pypi): We push releases to external services
-    - Pull targets (apt, brew): We maintain package definitions in our repo
+    - Push targets:
+      ✅ github: Create releases with assets and notes
+      ✅ pypi: Build and publish Python packages
+    - Pull targets:
+      🚧 apt: Generate and maintain debian packages
+      🚧 brew: Generate and maintain Homebrew formulas
 
 2.2 Release Steps
     Each target follows these steps in sequence:

@@ -1,4 +1,5 @@
 #!/bin/bash
+# Common utility functions for py-release scripts
 
 # Colors for output
 RED='\033[0;31m'
@@ -7,24 +8,91 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Logging functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $1"
+log() {
+    echo "[INFO] $1"
 }
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $1"
+error() {
+    echo "[ERROR] $1" >&2
 }
 
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
+warn() {
+    echo "[WARN] $1" >&2
+}
+
+# Get package name from pyproject.toml or environment variable
+get_package_name() {
+    if [ -n "$PACKAGE_NAME" ]; then
+        echo "$PACKAGE_NAME"
+        return 0
+    fi
+
+    if [ -f "pyproject.toml" ]; then
+        # Try to get package name from pyproject.toml
+        name=$(grep "^name = " pyproject.toml | head -n1 | cut -d'"' -f2)
+        if [ -n "$name" ]; then
+            echo "$name"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Get package version from pyproject.toml or environment variable
+get_package_version() {
+    if [ -n "$VERSION" ]; then
+        echo "$VERSION"
+        return 0
+    fi
+
+    if [ -f "pyproject.toml" ]; then
+        # Try to get version from pyproject.toml
+        version=$(grep "^version = " pyproject.toml | head -n1 | cut -d'"' -f2)
+        if [ -n "$version" ]; then
+            echo "$version"
+            return 0
+        fi
+    fi
+
+    return 1
+}
+
+# Create a temporary directory and ensure it's cleaned up on exit
+create_temp_dir() {
+    local temp_dir
+    temp_dir=$(mktemp -d)
+    trap 'rm -rf "$temp_dir"' EXIT
+    echo "$temp_dir"
+}
+
+# Check if a command exists
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+# Check if a Python package is installed
+python_package_installed() {
+    python3 -c "import $1" >/dev/null 2>&1
+}
+
+# Get Python version
+get_python_version() {
+    python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")'
+}
+
+# Get Python site-packages directory
+get_python_site_packages() {
+    local prefix=$1
+    echo "$prefix/lib/python$(get_python_version)/site-packages"
 }
 
 # Version validation
 validate_version() {
     local version=$1
     if [[ ! $version =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.]+)?$ ]]; then
-        log_error "Invalid version format: $version"
-        log_error "Version must match: X.Y.Z or X.Y.Z-suffix"
+        error "Invalid version format: $version"
+        error "Version must match: X.Y.Z or X.Y.Z-suffix"
         return 1
     fi
 }
@@ -33,8 +101,8 @@ validate_version() {
 validate_package_name() {
     local name=$1
     if [[ ! $name =~ ^[a-zA-Z][a-zA-Z0-9_-]*$ ]]; then
-        log_error "Invalid package name: $name"
-        log_error "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens"
+        error "Invalid package name: $name"
+        error "Package name must start with a letter and contain only letters, numbers, underscores, and hyphens"
         return 1
     fi
 }
@@ -53,7 +121,7 @@ get_current_version() {
     elif [ -f "VERSION" ]; then
         cat VERSION
     else
-        log_error "Could not determine current version"
+        error "Could not determine current version"
         return 1
     fi
 }
@@ -68,17 +136,9 @@ check_dependencies() {
     done
 
     if [ ${#missing[@]} -ne 0 ]; then
-        log_error "Missing required dependencies: ${missing[*]}"
+        error "Missing required dependencies: ${missing[*]}"
         return 1
     fi
-}
-
-# Create temporary directory that gets cleaned up on exit
-create_temp_dir() {
-    local temp_dir
-    temp_dir=$(mktemp -d)
-    trap 'rm -rf "$temp_dir"' EXIT
-    echo "$temp_dir"
 }
 
 # Check if a command succeeded and print appropriate message
@@ -88,10 +148,10 @@ check_status() {
     local error_msg=${3:-"Operation failed"}
 
     if [ $status -eq 0 ]; then
-        log_info "$success_msg"
+        log "$success_msg"
         return 0
     else
-        log_error "$error_msg"
+        error "$error_msg"
         return 1
     fi
 }

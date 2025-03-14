@@ -1,0 +1,64 @@
+#!/bin/bash
+# Publish script for Homebrew formula
+# Commits the formula to the repository
+
+set -e
+
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get py-release root directory
+PY_RELEASE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_ROOT/.." && pwd)"
+
+# Source common functions
+source "$PY_RELEASE_ROOT/lib/common.sh"
+source "$SCRIPT_DIR/lib/brew_utils.sh"
+
+# Parse arguments
+PACKAGE_NAME=${1:-$(get_package_name)}
+VERSION=${2:-$(get_package_version)}
+FORCE=${3:-false}
+
+# Validate arguments
+if [ -z "$PACKAGE_NAME" ]; then
+    error "Package name is required"
+    exit 1
+fi
+
+if [ -z "$VERSION" ]; then
+    error "Version is required"
+    exit 1
+fi
+
+FORMULA_PATH="$REPO_ROOT/Formula/$PACKAGE_NAME.rb"
+
+# Check if the formula exists
+if [ ! -f "$FORMULA_PATH" ]; then
+    error "Formula file not found at $FORMULA_PATH"
+    exit 1
+fi
+
+log "Publishing formula for $PACKAGE_NAME version $VERSION..."
+
+# Change to repository root for git operations
+cd "$REPO_ROOT"
+
+# Check if there are changes
+if ! git diff --quiet "Formula/$PACKAGE_NAME.rb"; then
+    # Commit changes
+    git add "Formula/$PACKAGE_NAME.rb"
+    git commit -m "Update Homebrew formula for $PACKAGE_NAME to version $VERSION"
+    log "Changes committed successfully"
+    log "To push changes, run: git push"
+else
+    if [ "$FORCE" = "true" ]; then
+        log "Force update requested. Committing anyway..."
+        git add "Formula/$PACKAGE_NAME.rb"
+        git commit -m "Update Homebrew formula for $PACKAGE_NAME to version $VERSION (forced)"
+        log "Changes committed successfully"
+        log "To push changes, run: git push"
+    else
+        log "No changes to Homebrew formula, skipping commit"
+    fi
+fi

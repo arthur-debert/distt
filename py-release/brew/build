@@ -1,0 +1,50 @@
+#!/bin/bash
+# Build script for Homebrew formula
+# Generates a Homebrew formula for a PyPI package
+
+set -e
+
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get py-release root directory
+PY_RELEASE_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_ROOT/.." && pwd)"
+
+# Source common functions
+source "$PY_RELEASE_ROOT/lib/common.sh"
+source "$SCRIPT_DIR/lib/brew_utils.sh"
+
+# Parse arguments
+PACKAGE_NAME=${1:-$(get_package_name)}
+VERSION=${2:-$(get_package_version)}
+FORCE=${3:-false}
+
+# Validate arguments
+if [ -z "$PACKAGE_NAME" ]; then
+    error "Package name is required"
+    exit 1
+fi
+
+if [ -z "$VERSION" ]; then
+    error "Version is required"
+    exit 1
+fi
+
+# Create Formula directory in project root if it doesn't exist
+FORMULA_DIR="$REPO_ROOT/Formula"
+mkdir -p "$FORMULA_DIR"
+
+log "Building Homebrew formula for $PACKAGE_NAME version $VERSION..."
+
+# Generate the formula
+python3 "$SCRIPT_DIR/lib/pypi-to-brew" "$PACKAGE_NAME" --output-dir="$FORMULA_DIR"
+
+# Verify the formula was created
+FORMULA_PATH="$FORMULA_DIR/$PACKAGE_NAME.rb"
+if [ ! -f "$FORMULA_PATH" ]; then
+    error "Failed to generate formula at $FORMULA_PATH"
+    exit 1
+fi
+
+log "Formula generated successfully at $FORMULA_PATH"
