@@ -1,0 +1,17 @@
+[tool.poetry]
+name = "nanodoc"
+version = "0.8.8"
+description = "A minimalist document bundler designed for stitching hints, reminders and short docs"
+authors = ["Arthur Debert"]
+readme = "README.txt"
+packages = [{ include = "nanodoc" }]
+
+[tool.poetry.dependencies]
+python = "^3.7"
+
+[tool.poetry.scripts]
+nanodoc = "nanodoc.cli:main"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

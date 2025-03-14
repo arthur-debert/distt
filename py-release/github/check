@@ -1,0 +1,69 @@
+#!/bin/bash
+set -e
+
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get py-release root directory
+PY_RELEASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_DIR/.." && pwd)"
+
+# Source common functions
+source "$PY_RELEASE_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/github_utils.sh"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --version=*)
+        VERSION="${1#*=}"
+        shift
+        ;;
+    --package-name=*)
+        PACKAGE_NAME="${1#*=}"
+        shift
+        ;;
+    --force)
+        FORCE=1
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+done
+
+main() {
+    # Check for required dependencies
+    check_dependencies gh git
+
+    # Validate version if provided
+    if [ -n "$VERSION" ]; then
+        validate_version "$VERSION" || exit 1
+    fi
+
+    # Check release assets
+    log_info "Checking release assets..."
+    if ! validate_release_assets; then
+        log_error "Release assets validation failed"
+        return 1
+    fi
+
+    # Check release notes content
+    local notes_file=".github/release-assets/release-notes.md"
+    if [ ! -s "$notes_file" ]; then
+        log_error "Release notes are empty"
+        return 1
+    fi
+
+    # Check if notes contain version and package name
+    if ! grep -q "$PACKAGE_NAME.*$VERSION" "$notes_file"; then
+        log_warn "Release notes might not contain package name and version"
+    fi
+
+    log_info "Release assets check passed"
+    return 0
+}
+
+main "$@"

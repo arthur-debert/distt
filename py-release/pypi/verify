@@ -5,8 +5,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get py-release root directory
 PY_RELEASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# Get repository root directory
-REPO_ROOT="$(cd "$PY_RELEASE_DIR/.." && pwd)"
+# Project root is the current working directory
+REPO_ROOT="$(pwd)"
 
 # Source common functions
 source "$PY_RELEASE_DIR/lib/common.sh"
@@ -47,15 +47,19 @@ main() {
         VERSION=$(get_current_version)
     fi
 
-    # Wait a bit for PyPI to update
+    # Wait for PyPI to update with retries
     log_info "Waiting for package to be available on PyPI..."
-    sleep 30
-
-    # Verify package exists on PyPI
-    if ! pypi_package_exists "$PACKAGE_NAME" "$VERSION"; then
-        log_error "Package $PACKAGE_NAME version $VERSION not found on PyPI"
-        return 1
-    fi
+    for i in {1..5}; do
+        if pypi_package_exists "$PACKAGE_NAME" "$VERSION"; then
+            break
+        fi
+        log_info "Attempt $i: Package not found, waiting 30 seconds..."
+        sleep 30
+        if [ $i -eq 5 ]; then
+            log_error "Package $PACKAGE_NAME version $VERSION not found on PyPI after 5 attempts"
+            return 1
+        fi
+    done
 
     log_info "Testing installation from PyPI..."
     if install_pypi_package "$PACKAGE_NAME" "$VERSION"; then

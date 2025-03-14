@@ -5,12 +5,12 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get py-release root directory
 PY_RELEASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# Project root is the current working directory
-REPO_ROOT="$(pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_DIR/.." && pwd)"
 
 # Source common functions
 source "$PY_RELEASE_DIR/lib/common.sh"
-source "$SCRIPT_DIR/lib/pypi_utils.sh"
+source "$SCRIPT_DIR/lib/github_utils.sh"
 
 # Parse arguments
 while [[ $# -gt 0 ]]; do
@@ -36,19 +36,28 @@ done
 
 main() {
     # Check for required dependencies
-    check_dependencies python3 poetry
+    check_dependencies gh git
 
     # Validate version if provided
     if [ -n "$VERSION" ]; then
         validate_version "$VERSION" || exit 1
     fi
 
-    # Build using poetry
-    cd "$REPO_ROOT"
-    log_info "Building PyPI package..."
-    poetry build
+    # Check if release exists
+    log_info "Verifying GitHub release v$VERSION..."
+    if ! github_release_exists "$PACKAGE_NAME" "$VERSION"; then
+        log_error "Release v$VERSION not found"
+        return 1
+    fi
 
-    check_status $? "PyPI package built successfully" "Failed to build PyPI package"
+    # Get release info
+    if ! gh release view "v$VERSION" --json tagName,name,body,assets >/dev/null; then
+        log_error "Failed to get release information"
+        return 1
+    fi
+
+    log_info "Successfully verified GitHub release v$VERSION"
+    return 0
 }
 
 main "$@"

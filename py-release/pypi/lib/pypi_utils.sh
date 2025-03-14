@@ -5,11 +5,11 @@ pypi_package_exists() {
     local package_name=$1
     local version=$2
 
-    # Try to get package info from PyPI
-    if curl -s "https://pypi.org/pypi/$package_name/$version/json" | grep -q "404 Not Found"; then
-        return 1
+    # Use pip index versions to check if version exists
+    if pip index versions "$package_name" 2>/dev/null | grep -q "$version"; then
+        return 0
     fi
-    return 0
+    return 1
 }
 
 # Get latest version from PyPI
@@ -44,11 +44,11 @@ install_local_package() {
 
     # Install package
     if [ -n "$version" ]; then
-        pip install "dist/$package_name-$version.tar.gz"
+        pip install "./dist/$package_name-$version.tar.gz"
     else
         # Find latest version in dist directory
         local dist_file
-        dist_file=$(ls -t dist/"$package_name"-*.tar.gz | head -n1)
+        dist_file=$(ls -t ./dist/"$package_name"-*.tar.gz | head -n1)
         pip install "$dist_file"
     fi
 

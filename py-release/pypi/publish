@@ -5,8 +5,8 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Get py-release root directory
 PY_RELEASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-# Get repository root directory
-REPO_ROOT="$(cd "$PY_RELEASE_DIR/.." && pwd)"
+# Project root is the current working directory
+REPO_ROOT="$(pwd)"
 
 # Source common functions
 source "$PY_RELEASE_DIR/lib/common.sh"
