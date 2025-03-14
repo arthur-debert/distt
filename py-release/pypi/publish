@@ -1,0 +1,75 @@
+#!/bin/bash
+set -e
+
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get py-release root directory
+PY_RELEASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_DIR/.." && pwd)"
+
+# Source common functions
+source "$PY_RELEASE_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/pypi_utils.sh"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --version=*)
+        VERSION="${1#*=}"
+        shift
+        ;;
+    --package-name=*)
+        PACKAGE_NAME="${1#*=}"
+        shift
+        ;;
+    --force)
+        FORCE=1
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+done
+
+main() {
+    cd "$REPO_ROOT"
+
+    # Check for required dependencies
+    check_dependencies poetry twine
+
+    # Get package name from pyproject.toml if not provided
+    if [ -z "$PACKAGE_NAME" ]; then
+        PACKAGE_NAME=$(python3 -c "import toml; print(toml.load('pyproject.toml')['tool']['poetry']['name'])")
+    fi
+
+    # Get version if not provided
+    if [ -z "$VERSION" ]; then
+        VERSION=$(get_current_version)
+    fi
+
+    # Check if package already exists on PyPI
+    if pypi_package_exists "$PACKAGE_NAME" "$VERSION"; then
+        if [ -z "$FORCE" ]; then
+            log_error "Version $VERSION already exists on PyPI. Use --force to override."
+            return 1
+        else
+            log_warn "Version $VERSION exists on PyPI but --force was specified."
+        fi
+    fi
+
+    log_info "Publishing $PACKAGE_NAME version $VERSION to PyPI..."
+
+    # Upload to PyPI using poetry
+    if poetry publish; then
+        log_info "Successfully published to PyPI"
+        return 0
+    else
+        log_error "Failed to publish to PyPI"
+        return 1
+    fi
+}
+
+main "$@"
