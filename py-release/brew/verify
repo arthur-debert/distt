@@ -1,6 +1,6 @@
 #!/bin/bash
 # Verify script for Homebrew formula
-# Tests installation from Homebrew
+# Tests installation from the releasee-test tap
 
 set -e
 
@@ -16,9 +16,35 @@ source "$PY_RELEASE_ROOT/lib/common.sh"
 source "$SCRIPT_DIR/lib/brew_utils.sh"
 
 # Parse arguments
-PACKAGE_NAME=${1:-$(get_package_name)}
-VERSION=${2:-$(get_package_version)}
-FORCE=${3:-false}
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --version=*)
+        VERSION="${1#*=}"
+        shift
+        ;;
+    --package-name=*)
+        PACKAGE_NAME="${1#*=}"
+        shift
+        ;;
+    --force)
+        FORCE=1
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+done
+
+# Use defaults if not provided
+if [ -z "$PACKAGE_NAME" ]; then
+    PACKAGE_NAME=$(get_package_name)
+fi
+
+if [ -z "$VERSION" ]; then
+    VERSION=$(get_package_version)
+fi
 
 # Validate arguments
 if [ -z "$PACKAGE_NAME" ]; then
@@ -31,66 +57,60 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
-FORMULA_PATH="$REPO_ROOT/Formula/$PACKAGE_NAME.rb"
-
-# Check if the formula exists
-if [ ! -f "$FORMULA_PATH" ]; then
-    error "Formula file not found at $FORMULA_PATH"
-    exit 1
-fi
-
-log "Verifying Homebrew formula for $PACKAGE_NAME version $VERSION..."
+log "Verifying installation of $PACKAGE_NAME version $VERSION from releasee-test tap..."
 
 # Create a temporary directory for testing
 TEMP_DIR=$(mktemp -d)
-TEMP_PREFIX="$TEMP_DIR/prefix"
-mkdir -p "$TEMP_PREFIX"
+trap 'rm -rf "$TEMP_DIR" && brew untap test/releasee-test 2>/dev/null || true' EXIT
 
-log "Using temporary prefix: $TEMP_PREFIX"
-
-# Create a temporary Homebrew environment
-export HOMEBREW_PREFIX="$TEMP_PREFIX"
-export HOMEBREW_CELLAR="$TEMP_PREFIX/Cellar"
-export HOMEBREW_REPOSITORY="$TEMP_PREFIX"
-mkdir -p "$HOMEBREW_CELLAR"
-
-# Install from local formula
-log "Installing from local formula..."
-brew install --prefix="$TEMP_PREFIX" --build-from-source "$FORMULA_PATH"
-
-# Add the temporary bin directory to PATH
-export PATH="$TEMP_PREFIX/bin:$PATH"
-
-# Test help command
-log "Testing '$PACKAGE_NAME --help'..."
-"$PACKAGE_NAME" --help
-if [ $? -ne 0 ]; then
-    error "Help command test failed"
-    rm -rf "$TEMP_DIR"
+# Create a temporary tap from the releasee-test branch
+log "Creating temporary tap from releasee-test branch..."
+cd "$REPO_ROOT"
+if ! git rev-parse --verify releasee-test >/dev/null 2>&1; then
+    error "releasee-test branch does not exist"
     exit 1
 fi
-log "Help command test passed"
 
-# Test version command
-log "Testing '$PACKAGE_NAME --version'..."
-"$PACKAGE_NAME" --version
-if [ $? -ne 0 ]; then
-    error "Version command test failed"
-    rm -rf "$TEMP_DIR"
+# Create temporary tap directory with Formula subdirectory
+mkdir -p "$TEMP_DIR/Formula"
+
+# Extract formula from releasee-test branch
+git show releasee-test:Formula/$PACKAGE_NAME.rb >"$TEMP_DIR/Formula/$PACKAGE_NAME.rb" || {
+    error "Failed to extract formula from releasee-test branch"
     exit 1
-fi
-log "Version command test passed"
+}
 
-# Verify installed version matches expected version
-INSTALLED_VERSION=$("$PACKAGE_NAME" --version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')
+# Initialize git repository in temporary directory
+cd "$TEMP_DIR"
+git init -q
+git add Formula
+git config --local user.email "test@example.com"
+git config --local user.name "Test User"
+git commit -q -m "Initial commit"
+
+# Tap the temporary repository
+log "Tapping temporary repository..."
+brew tap test/releasee-test "$TEMP_DIR"
+
+# Install the formula from the tap
+log "Installing formula from tap..."
+HOMEBREW_NO_AUTO_UPDATE=1 brew install test/releasee-test/$PACKAGE_NAME
+
+# Verify the version
+log "Verifying installed version..."
+INSTALLED_VERSION=$("$(brew --prefix)/bin/$PACKAGE_NAME" --version | grep -o '[0-9]\+\.[0-9]\+\.[0-9]\+')
 if [ "$INSTALLED_VERSION" != "$VERSION" ]; then
     error "Version mismatch: expected $VERSION, got $INSTALLED_VERSION"
-    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
-log "All verification tests passed successfully"
+# Test the installation
+log "Testing installation..."
+"$(brew --prefix)/bin/$PACKAGE_NAME" --help
 
 # Clean up
 log "Cleaning up..."
-rm -rf "$TEMP_DIR"
+brew uninstall test/releasee-test/$PACKAGE_NAME
+brew untap test/releasee-test
+
+log "Verification successful"

@@ -36,7 +36,7 @@ done
 
 main() {
     # Check for required dependencies
-    check_dependencies gh git
+    check_dependencies gh git jq
 
     # Validate version if provided
     if [ -n "$VERSION" ]; then
@@ -44,19 +44,36 @@ main() {
     fi
 
     # Check if release exists
-    log_info "Verifying GitHub release v$VERSION..."
+    log "Verifying GitHub release v$VERSION..."
     if ! github_release_exists "$PACKAGE_NAME" "$VERSION"; then
-        log_error "Release v$VERSION not found"
+        error "Release v$VERSION not found"
         return 1
     fi
 
-    # Get release info
-    if ! gh release view "v$VERSION" --json tagName,name,body,assets >/dev/null; then
-        log_error "Failed to get release information"
+    # Verify release details and assets
+    if ! verify_github_release "$VERSION" "$PACKAGE_NAME"; then
+        error "Release verification failed"
         return 1
     fi
 
-    log_info "Successfully verified GitHub release v$VERSION"
+    # Create a temporary directory for testing
+    TEMP_DIR=$(mktemp -d)
+    trap 'rm -rf "$TEMP_DIR"' EXIT
+
+    # Download and verify release assets
+    log "Downloading release assets..."
+    (
+        cd "$TEMP_DIR"
+        gh release download "v$VERSION" --repo "arthur-debert/nanodoc" --pattern "*.whl" --pattern "*.tar.gz"
+
+        # Check if assets were downloaded
+        if [ ! "$(ls -A .)" ]; then
+            error "Failed to download release assets"
+            exit 1
+        fi
+    )
+
+    log "Successfully verified GitHub release v$VERSION"
     return 0
 }
 

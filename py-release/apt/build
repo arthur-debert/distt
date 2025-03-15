@@ -1,0 +1,76 @@
+#!/bin/bash
+set -e
+
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get py-release root directory
+PY_RELEASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_DIR/.." && pwd)"
+
+# Source common functions
+source "$PY_RELEASE_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/apt_utils.sh"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --version=*)
+        VERSION="${1#*=}"
+        shift
+        ;;
+    --package-name=*)
+        PACKAGE_NAME="${1#*=}"
+        shift
+        ;;
+    --force)
+        FORCE=1
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+done
+
+main() {
+    # Check for required dependencies
+    if is_linux; then
+        check_dependencies dpkg-deb python3
+    else
+        check_dependencies docker
+    fi
+
+    # Validate version if provided
+    if [ -n "$VERSION" ]; then
+        validate_version "$VERSION" || exit 1
+    fi
+
+    # Create temporary build directory
+    BUILD_DIR=$(mktemp -d)
+    trap 'rm -rf "$BUILD_DIR"' EXIT
+
+    # Create debian package structure
+    log "Creating debian package structure..."
+    create_deb_structure "$PACKAGE_NAME" "$VERSION" "all" "$BUILD_DIR"
+
+    # Install package files
+    log "Installing package files..."
+    poetry build
+    pip install --target="$BUILD_DIR/usr/lib/python3/dist-packages" dist/*.whl
+
+    # Build debian package
+    log "Building debian package..."
+    build_deb_package "$PACKAGE_NAME" "$VERSION" "$BUILD_DIR" "dist"
+
+    # Validate package
+    log "Validating debian package..."
+    validate_deb_package "dist/${PACKAGE_NAME}_${VERSION}_all.deb"
+
+    log "Successfully built debian package"
+    return 0
+}
+
+# Run in Docker if not on Linux
+run_in_docker "$0" "$@"

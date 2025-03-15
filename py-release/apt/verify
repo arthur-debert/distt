@@ -1,0 +1,103 @@
+#!/bin/bash
+set -e
+
+# Get the directory of the current script
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Get py-release root directory
+PY_RELEASE_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+# Get repository root directory
+REPO_ROOT="$(cd "$PY_RELEASE_DIR/.." && pwd)"
+
+# Source common functions
+source "$PY_RELEASE_DIR/lib/common.sh"
+source "$SCRIPT_DIR/lib/apt_utils.sh"
+source "$SCRIPT_DIR/lib/repo_utils.sh"
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    --version=*)
+        VERSION="${1#*=}"
+        shift
+        ;;
+    --package-name=*)
+        PACKAGE_NAME="${1#*=}"
+        shift
+        ;;
+    --repo-dir=*)
+        REPO_DIR="${1#*=}"
+        shift
+        ;;
+    --repo-url=*)
+        REPO_URL="${1#*=}"
+        shift
+        ;;
+    --force)
+        FORCE=1
+        shift
+        ;;
+    *)
+        echo "Unknown argument: $1"
+        exit 1
+        ;;
+    esac
+done
+
+main() {
+    # Check for required dependencies
+    if is_linux; then
+        check_dependencies dpkg apt-get python3
+    else
+        check_dependencies docker
+    fi
+
+    # Validate version if provided
+    if [ -n "$VERSION" ]; then
+        validate_version "$VERSION" || exit 1
+    fi
+
+    # Set default repository directory if not provided
+    REPO_DIR=${REPO_DIR:-"$REPO_ROOT/apt-repo"}
+
+    log "Verifying package installation from repository..."
+
+    # If repo URL is provided, use that instead of local repo
+    if [ -n "$REPO_URL" ]; then
+        log "Using remote repository: $REPO_URL"
+        echo "deb [trusted=yes] $REPO_URL stable main" >/etc/apt/sources.list.d/remote.list
+    else
+        log "Using local repository: $REPO_DIR"
+        configure_apt_for_repo "$REPO_DIR"
+    fi
+
+    # Update package lists
+    log "Updating package lists..."
+    apt-get update -qq
+
+    # Remove existing package if installed
+    if dpkg -l "$PACKAGE_NAME" >/dev/null 2>&1; then
+        log "Removing existing package..."
+        apt-get remove -y "$PACKAGE_NAME" >/dev/null
+    fi
+
+    # Install package from repository
+    log "Installing package from repository..."
+    apt-get install -y "$PACKAGE_NAME"=${VERSION} >/dev/null
+
+    # Test package installation
+    log "Testing package installation..."
+    test_deb_package "$PACKAGE_NAME" "$VERSION"
+
+    # Clean up repository configuration
+    if [ -n "$REPO_URL" ]; then
+        rm -f /etc/apt/sources.list.d/remote.list
+    else
+        cleanup_apt_repo_config
+    fi
+
+    log "Successfully verified package installation from repository"
+    return 0
+}
+
+# Run in Docker if not on Linux
+run_in_docker "$0" "$@"

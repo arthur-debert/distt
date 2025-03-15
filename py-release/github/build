@@ -36,7 +36,7 @@ done
 
 main() {
     # Check for required dependencies
-    check_dependencies gh git
+    check_dependencies gh git poetry
 
     # Validate version if provided
     if [ -n "$VERSION" ]; then
@@ -46,24 +46,50 @@ main() {
     # Check if release already exists
     if github_release_exists "$PACKAGE_NAME" "$VERSION"; then
         if [ -z "$FORCE" ]; then
-            log_error "Release v$VERSION already exists. Use --force to override."
+            error "Release v$VERSION already exists. Use --force to override."
             return 1
         else
-            log_warn "Release v$VERSION exists but --force was specified."
+            warn "Release v$VERSION exists but --force was specified."
+            # Delete existing tag and release
+            gh release delete "v$VERSION" -y || true
+            git tag -d "v$VERSION" || true
+            git push origin ":refs/tags/v$VERSION" || true
         fi
     fi
 
-    # Generate release notes
-    log_info "Generating release notes..."
-    notes_file=$(generate_release_notes "$VERSION" "$PACKAGE_NAME")
+    # Create git tag if it doesn't exist
+    if ! git rev-parse "v$VERSION" >/dev/null 2>&1; then
+        log "Creating git tag v$VERSION..."
+        git tag -a "v$VERSION" -m "$PACKAGE_NAME version $VERSION"
+    fi
 
-    # Verify release assets
-    if ! validate_release_assets; then
-        log_error "Failed to validate release assets"
+    # Push the tag
+    log "Pushing git tag v$VERSION..."
+    if ! git push origin "v$VERSION"; then
+        error "Failed to push tag v$VERSION"
         return 1
     fi
 
-    log_info "Release assets prepared successfully"
+    # Generate release notes
+    log "Generating release notes..."
+    notes_file=$(generate_release_notes "$VERSION" "$PACKAGE_NAME")
+
+    # Build PyPI distribution files
+    log "Building PyPI distribution files..."
+    poetry build
+
+    # Copy distribution files to release assets
+    assets_dir=$(prepare_release_assets)
+    mkdir -p "$assets_dir"
+    cp dist/* "$assets_dir/"
+
+    # Verify release assets
+    if ! validate_release_assets; then
+        error "Failed to validate release assets"
+        return 1
+    fi
+
+    log "Release assets prepared successfully"
     return 0
 }
 

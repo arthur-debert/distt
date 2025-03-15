@@ -39,6 +39,18 @@ generate_release_notes() {
         else
             git log --pretty=format:"* %s"
         fi
+        echo
+        echo "## Installation"
+        echo
+        echo "### PyPI"
+        echo "\`\`\`bash"
+        echo "pip install $package_name==$version"
+        echo "\`\`\`"
+        echo
+        echo "### Homebrew"
+        echo "\`\`\`bash"
+        echo "brew install adebert/releasee-test/$package_name"
+        echo "\`\`\`"
     } >"$notes_file"
 
     echo "$notes_file"
@@ -50,11 +62,24 @@ validate_release_assets() {
 
     # Check if assets directory exists
     if [ ! -d "$assets_dir" ]; then
+        error "Assets directory not found: $assets_dir"
         return 1
     fi
 
-    # Check if release notes exist
-    if [ ! -f "$assets_dir/release-notes.md" ]; then
+    # Check if release notes exist and are not empty
+    if [ ! -s "$assets_dir/release-notes.md" ]; then
+        error "Release notes not found or empty: $assets_dir/release-notes.md"
+        return 1
+    fi
+
+    # Check for distribution files
+    if ! ls "$assets_dir"/*.whl >/dev/null 2>&1; then
+        error "No wheel distribution file found in $assets_dir"
+        return 1
+    fi
+
+    if ! ls "$assets_dir"/*.tar.gz >/dev/null 2>&1; then
+        error "No source distribution file found in $assets_dir"
         return 1
     fi
 
@@ -66,11 +91,13 @@ create_github_release() {
     local version=$1
     local package_name=$2
     local notes_file=$3
+    local assets_dir=".github/release-assets"
 
+    # Create release with all assets
     gh release create "v$version" \
         --title "$package_name v$version" \
         --notes-file "$notes_file" \
-        "$notes_file"
+        "$assets_dir"/*
 }
 
 # Get latest GitHub release version
@@ -79,4 +106,34 @@ get_github_latest_version() {
 
     # Get latest release version from GitHub
     gh release list --limit 1 | awk '{print $1}' | sed 's/^v//'
+}
+
+# Verify GitHub release
+verify_github_release() {
+    local version=$1
+    local package_name=$2
+
+    # Check release info
+    local release_info
+    release_info=$(gh release view "v$version" --json tagName,name,body,assets)
+
+    # Check tag name
+    if ! echo "$release_info" | jq -e '.tagName == "v'"$version"'"' >/dev/null; then
+        error "Release tag mismatch"
+        return 1
+    fi
+
+    # Check release name
+    if ! echo "$release_info" | jq -e '.name == "'"$package_name v$version"'"' >/dev/null; then
+        error "Release name mismatch"
+        return 1
+    fi
+
+    # Check assets
+    if ! echo "$release_info" | jq -e '.assets | length >= 3' >/dev/null; then
+        error "Missing release assets"
+        return 1
+    fi
+
+    return 0
 }

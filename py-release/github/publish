@@ -46,10 +46,10 @@ main() {
     # Check if release already exists
     if github_release_exists "$PACKAGE_NAME" "$VERSION"; then
         if [ -z "$FORCE" ]; then
-            log_error "Release v$VERSION already exists. Use --force to override."
+            error "Release v$VERSION already exists. Use --force to override."
             return 1
         else
-            log_warn "Release v$VERSION exists but --force was specified."
+            warn "Release v$VERSION exists but --force was specified."
             # Delete existing release
             gh release delete "v$VERSION" -y || true
         fi
@@ -57,17 +57,17 @@ main() {
 
     # Verify release assets exist
     if ! validate_release_assets; then
-        log_error "Release assets not found. Run build step first."
+        error "Release assets not found. Run build step first."
         return 1
     fi
 
     # Create GitHub release
-    log_info "Creating GitHub release v$VERSION..."
+    log "Creating GitHub release v$VERSION..."
     if create_github_release "$VERSION" "$PACKAGE_NAME" ".github/release-assets/release-notes.md"; then
-        log_info "Successfully created GitHub release v$VERSION"
+        log "Successfully created GitHub release v$VERSION"
         return 0
     else
-        log_error "Failed to create GitHub release"
+        error "Failed to create GitHub release"
         return 1
     fi
 }
