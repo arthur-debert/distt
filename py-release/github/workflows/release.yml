@@ -141,12 +141,12 @@ jobs:
             
             if [[ "$STEPS" == *"build"* ]]; then
               echo "Running build for $target..."
-              ./py-release/$target/build --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
+              $target/build --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
             fi
 
             if [[ "$STEPS" == *"check"* ]]; then
               echo "Running check for $target..."
-              ./py-release/$target/check --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
+              $target/check --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
             fi
 
             if [[ "$STEPS" == *"publish"* ]]; then
@@ -155,12 +155,12 @@ jobs:
               if [[ "$FORCE" == "true" ]]; then
                 EXTRA_ARGS="--force"
               fi
-              ./py-release/$target/publish --package-name="$PACKAGE_NAME" --version="$VERSION" $EXTRA_ARGS || exit 1
+              $target/publish --package-name="$PACKAGE_NAME" --version="$VERSION" $EXTRA_ARGS || exit 1
             fi
 
             if [[ "$STEPS" == *"verify"* ]]; then
               echo "Running verify for $target..."
-              ./py-release/$target/verify --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
+              $target/verify --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
             fi
           }
 
@@ -179,4 +179,4 @@ jobs:
 
           if [[ "$TARGETS" == *"github"* ]]; then
             run_target_steps "github"
-          fi 
+          fi

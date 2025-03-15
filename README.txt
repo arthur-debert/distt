@@ -1,32 +1,40 @@
 PY-RELEASE
 
 A drop-in solution for managing Python package releases across multiple platforms:
-- ✅ GitHub releases (tested and working)
-- ✅ PyPI releases (tested and working)
-- 🚧 APT packages (not implemented)
-- 🚧 Homebrew formulas (in progress)
+- ✅ Package Publishing (for package authors):
+  - ✅ GitHub releases
+  - ✅ PyPI releases
+- ✅ Package Distribution (for package managers):
+  - ✅ APT packages
+  - ✅ Homebrew formulas
 
 Supports both local execution and GitHub Actions workflows.
 
 1. INSTALLATION
 
-   1.1 Copy the py-release directory to your project root
-   1.2 Run the setup script:
-       ./py-release/setup # will install dependencies if not available [deps]
+   ```bash
+   brew install distt
+   ```
 
 2. CONCEPTS
 
-2.1 Release Targets
-    There are two distinct target types:
-    - Push targets:
-      ✅ github: Create releases with assets and notes
-      ✅ pypi: Build and publish Python packages
-    - Pull targets:
-      🚧 apt: Generate and maintain debian packages
-      🚧 brew: Generate and maintain Homebrew formulas
+2.1 Publishing vs Distribution
+    The toolset is split into two main functions:
+    
+    Publishing (distt-publish):
+    - For package authors
+    - Publishes your Python package to:
+      - PyPI: Build and publish Python packages
+      - GitHub: Create releases with assets and notes
+    
+    Distribution (distt):
+    - For package managers and distributors
+    - Takes an existing PyPI package and creates:
+      - APT packages: Generate and maintain debian packages
+      - Homebrew formulas: Generate and maintain Homebrew formulas
 
 2.2 Release Steps
-    Each target follows these steps in sequence:
+    Each operation follows these steps in sequence:
     
     build  → Generate required artifacts
             - PyPI: Build distribution files
@@ -54,13 +62,15 @@ Supports both local execution and GitHub Actions workflows.
 
 3. USAGE
 
-3.1 The new-release command
-    By default runs all steps for all targets using GitHub Actions:
+3.1 Publishing (for package authors)
+    Use distt-publish to release your Python package:
     
-    ./py-release/new-release
+    ```bash
+    # Run from your Python package directory (where pyproject.toml is)
+    distt-publish
 
-    Options:
-    --target=<target>     Specify target (pypi,apt,brew,github)
+    # Options:
+    --target=<target>     Specify target (pypi,github)
     --local              Run locally instead of GitHub Actions
     --build             Run until build step
     --check             Run until check step
@@ -68,57 +78,44 @@ Supports both local execution and GitHub Actions workflows.
     --verify            Run all steps (default)
     --force             Force update even if no changes
     --version=<ver>     Override version
-    --package-name=<n>  Override package name
+    ```
 
     Examples:
-    ./py-release/new-release --target=brew --check --local
-    ./py-release/new-release --target=pypi --publish
-    PACKAGE_NAME=foo ./py-release/new-release --target=apt
+    ```bash
+    distt-publish --target=pypi --publish
+    distt-publish --local
+    ```
 
-3.2 Direct Target Scripts
-    Each target has individual scripts for each step:
+3.2 Distribution (for package managers)
+    Use distt to create distribution packages:
     
-    ./py-release/pypi/build   # Build PyPI package
-    ./py-release/apt/check    # Test APT package
-    ./py-release/brew/publish # Commit Brew formula
-    ./py-release/github/verify# Verify GitHub release
+    ```bash
+    distt
 
-4. DIRECTORY STRUCTURE
+    # Options:
+    --target=<target>     Specify target (apt,brew)
+    --local              Run locally instead of GitHub Actions
+    --package-name=<n>   Package name on PyPI to distribute
+    --build             Run until build step
+    --check             Run until check step
+    --publish           Run until publish step
+    --verify            Run all steps (default)
+    --force             Force update even if no changes
+    ```
 
-   your-repo/
-   └── py-release/
-       ├── new-release       # Main entry point
-       ├── setup            # Setup script
-       ├── lib/             # Shared utilities
-       ├── pypi/            # PyPI release scripts
-       │   ├── build       # Build distribution
-       │   ├── check       # Test local install
-       │   ├── publish     # Upload to PyPI
-       │   ├── verify      # Test PyPI install
-       │   └── lib/        # PyPI-specific utilities
-       ├── github/          # GitHub release scripts
-       │   ├── build       # Prepare release
-       │   ├── check       # Validate assets
-       │   ├── publish     # Create release
-       │   ├── verify      # Verify via API
-       │   └── lib/        # GitHub-specific utilities
-       ├── apt/             # APT package scripts
-       │   ├── build       # Generate package
-       │   ├── check       # Test local install
-       │   ├── publish     # Commit to repo
-       │   ├── verify      # Test apt install
-       │   └── lib/        # APT-specific utilities
-       └── brew/            # Homebrew scripts
-           ├── build       # Generate formula
-           ├── check       # Test local install
-           ├── publish     # Commit to repo
-           ├── verify      # Test brew install
-           └── lib/        # Homebrew-specific utilities
+    Examples:
+    ```bash
+    distt --target=brew --package-name=requests
+    distt --target=apt --package-name=flask
+    ```
 
-5. DEPENDENCIES [deps]
-    - Python 3.7+
-    - Poetry
-    - GitHub CLI (gh)
-    - Jinja2 (for templating)
-    - Twine (for PyPI uploads)
-    - For local APT builds: dpkg-deb, devscripts, debhelper
+4. DEPENDENCIES
+
+Required dependencies will be installed automatically via brew. For manual installation:
+- Python 3.7+
+- Poetry
+- GitHub CLI (gh)
+- Jinja2 (for templating)
+- Twine (for PyPI uploads)
+- For APT builds: dpkg-deb, devscripts, debhelper
+
