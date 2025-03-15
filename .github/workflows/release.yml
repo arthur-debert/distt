@@ -101,5 +101,5 @@ jobs:
           FORCE: ${{ needs.setup.outputs.force }}
           STEPS: ${{ needs.setup.outputs.steps }}
         run: |
-          ./py-release/github/build --package-name=$PACKAGE_NAME --version=$VERSION $([[ -n "$FORCE" ]] && echo "--force") && \
-          ./py-release/github/publish --package-name=$PACKAGE_NAME --version=$VERSION
+          github/build --package-name=$PACKAGE_NAME --version=$VERSION $([[ -n "$FORCE" ]] && echo "--force") && \
+          github/publish --package-name=$PACKAGE_NAME --version=$VERSION

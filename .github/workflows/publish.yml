@@ -1,0 +1,86 @@
+name: Publish Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      targets:
+        description: "Targets to publish to (comma-separated)"
+        required: false
+        default: "pypi,github"
+      force:
+        description: "Force update even if version exists"
+        required: false
+        default: "false"
+      release_notes:
+        description: "Release notes for GitHub release"
+        required: false
+        default: ""
+
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      force: ${{ github.event.inputs.force == 'true' }}
+      targets: ${{ github.event.inputs.targets }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+
+      - name: Get version
+        id: get_version
+        run: |
+          VERSION=$(poetry version -s)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+  publish:
+    needs: setup
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+
+      - name: Install GitHub CLI
+        run: |
+          type -p curl >/dev/null || (sudo apt update && sudo apt install curl -y)
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg \
+          && echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null \
+          && sudo apt update \
+          && sudo apt install gh -y
+
+      - name: Run publish
+        env:
+          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Configure Poetry
+          poetry config pypi-token.pypi $PYPI_TOKEN
+
+          # Run distt-publish
+          ./distt-publish \
+            --target=${{ needs.setup.outputs.targets }} \
+            ${{ needs.setup.outputs.force == 'true' && '--force' || '' }} \
+            ${{ github.event.inputs.release_notes != '' && format('--release-notes={0}', github.event.inputs.release_notes) || '' }}

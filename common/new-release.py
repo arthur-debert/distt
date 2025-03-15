@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-new-release - Unified command for managing releases
+distt - Unified command for managing releases
 
 This script provides a single entry point for creating PyPI releases and
 updating package managers. It supports various options to control what
@@ -8,7 +8,7 @@ gets published, where the work is done, and which steps of the process
 to execute.
 
 Usage:
-    new-release [options]
+    distt [options]
 
 Options:
     --target=<target>       Specify a target to publish to 
@@ -125,7 +125,7 @@ def get_script_path(script_name):
     
     # Map script names to their locations in the py-release directory
     script_locations = {
-        "pypi-new-release": "common/pypi-new-release",
+        "pypi-distt": "common/pypi-distt",
         "pypi-to-apt": "debian/pypi-to-apt",
         "test-apt-package.sh": "debian/test-apt-package.sh",
         "apt-update": "debian/apt-update",

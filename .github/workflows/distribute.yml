@@ -1,0 +1,57 @@
+name: Distribute Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      package_name:
+        description: "PyPI package name to distribute"
+        required: true
+      version:
+        description: "Version to distribute (defaults to latest)"
+        required: false
+      targets:
+        description: "Targets to distribute to (comma-separated)"
+        required: false
+        default: "apt,brew"
+      force:
+        description: "Force update even if version exists"
+        required: false
+        default: "false"
+      apt_repo:
+        description: "URL of APT repository"
+        required: false
+      brew_tap:
+        description: "URL of Homebrew tap"
+        required: false
+
+jobs:
+  distribute:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y dpkg-dev devscripts debhelper
+
+      - name: Run distribute
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Run distt
+          ./distt \
+            --package-name=${{ github.event.inputs.package_name }} \
+            ${{ github.event.inputs.version != '' && format('--version={0}', github.event.inputs.version) || '' }} \
+            --target=${{ github.event.inputs.targets }} \
+            ${{ github.event.inputs.force == 'true' && '--force' || '' }} \
+            ${{ github.event.inputs.apt_repo != '' && format('--apt-repo={0}', github.event.inputs.apt_repo) || '' }} \
+            ${{ github.event.inputs.brew_tap != '' && format('--brew-tap={0}', github.event.inputs.brew_tap) || '' }}

@@ -76,7 +76,7 @@ TARGET_DIR=$(cd "$TARGET_DIR" && pwd)
 
 # Install dependencies
 log_info "Installing Python dependencies..."
-pip install -r "$PY_RELEASE_DIR/lib/setup/requirements.txt"
+pip install -r "$PY_RELEASE_DIR/requirements.txt"
 
 # Install Homebrew dependencies if on macOS
 if [[ "$OSTYPE" == "darwin"* ]]; then
@@ -85,7 +85,7 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
         log_error "Homebrew is not installed"
         exit 1
     fi
-    brew bundle --file="$PY_RELEASE_DIR/lib/setup/Brewfile"
+    brew bundle --file="$PY_RELEASE_DIR/Brewfile"
 fi
 
 # Create GitHub workflows directory if it doesn't exist

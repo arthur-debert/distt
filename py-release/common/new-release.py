@@ -12,7 +12,7 @@ def get_script_path(script_name):
     
     # Map script names to their locations in the py-release directory
     script_locations = {
-        "pypi-new-release": "common/pypi-new-release",
+        "pypi-distt": "common/pypi-distt",
         "pypi-to-apt": "debian/pypi-to-apt",
         "test-apt-package.sh": "debian/test-apt-package.sh",
         "apt-update": "debian/apt-update",
