@@ -32,6 +32,18 @@ while [[ $# -gt 0 ]]; do
         GPG_KEY="${1#*=}"
         shift
         ;;
+    --target=*)
+        TARGET="${1#*=}"
+        shift
+        ;;
+    --git-url=*)
+        GIT_URL="${1#*=}"
+        shift
+        ;;
+    --public-url=*)
+        PUBLIC_URL="${1#*=}"
+        shift
+        ;;
     --force)
         FORCE=1
         shift
@@ -43,10 +55,47 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+# Publish to git repository
+publish_to_git() {
+    local repo_dir=$1
+    local git_url=$2
+    local temp_dir
+
+    if [ -z "$git_url" ]; then
+        error "Git URL is required for git publishing"
+        return 1
+    fi
+
+    log "Publishing to git repository..."
+
+    # Create temporary directory for git operations
+    temp_dir=$(mktemp -d)
+    trap 'rm -rf "$temp_dir"' EXIT
+
+    # Clone repository if it exists, or initialize new one
+    if git ls-remote "$git_url" &>/dev/null; then
+        git clone "$git_url" "$temp_dir"
+    else
+        git init "$temp_dir"
+        git -C "$temp_dir" remote add origin "$git_url"
+    fi
+
+    # Copy repository contents
+    cp -r "$repo_dir"/* "$temp_dir/"
+
+    # Commit and push changes
+    git -C "$temp_dir" add .
+    git -C "$temp_dir" commit -m "Update APT repository for $PACKAGE_NAME $VERSION" || true
+    git -C "$temp_dir" push -u origin main || git -C "$temp_dir" push -u origin master
+}
+
 main() {
     # Check for required dependencies
     if is_linux; then
         check_dependencies dpkg-scanpackages dpkg python3
+        if [ "$TARGET" = "git" ]; then
+            check_dependencies git
+        fi
     else
         check_dependencies docker
     fi
@@ -85,10 +134,27 @@ main() {
         return 1
     }
 
+    # Handle different publishing targets
+    case "$TARGET" in
+    "git")
+        publish_to_git "$REPO_DIR" "$GIT_URL"
+        ;;
+    *)
+        log "Using local repository (no remote target specified)"
+        ;;
+    esac
+
+    # Output success message with appropriate URL
     log "Successfully published package to APT repository"
-    log "Repository location: $REPO_DIR"
-    log "To use this repository, add the following to /etc/apt/sources.list:"
-    log "deb [trusted=yes] file://$REPO_DIR stable main"
+    if [ -n "$PUBLIC_URL" ]; then
+        log "Repository public URL: $PUBLIC_URL"
+        log "To use this repository, add the following to /etc/apt/sources.list:"
+        log "deb [trusted=yes] $PUBLIC_URL stable main"
+    else
+        log "Repository location: $REPO_DIR"
+        log "To use this repository locally, add the following to /etc/apt/sources.list:"
+        log "deb [trusted=yes] file://$REPO_DIR stable main"
+    fi
     return 0
 }
 
