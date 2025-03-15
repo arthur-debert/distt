@@ -8,3 +8,5 @@ Some guidelines for writing shell scripts:
 
 * use use dashes not underscores in file names, as do-something not do_something
 * we aim to run things with shellcheck, so you should lint it with it.
+* we tend to favor organizing code within functions as this makes it easier to isolate functionality as project grow
+* 

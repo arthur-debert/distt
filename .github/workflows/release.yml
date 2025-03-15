@@ -7,28 +7,22 @@ on:
   # Add manual trigger option
   workflow_dispatch:
     inputs:
+      package-name:
+        description: "Package name"
+        required: true
+      version:
+        description: "Version to release"
+        required: true
       targets:
-        description: "Comma-separated list of targets (pypi,brew,apt,github)"
+        description: "Targets to release to (comma separated)"
         required: false
-        type: string
-        default: "pypi,brew,apt,github"
-      force_update:
-        description: "Force update even if no changes detected"
+      force:
+        description: "Force release"
         required: false
         type: boolean
-        default: false
-      package_name:
-        description: "Package name (default: project name from pyproject.toml)"
-        required: false
-        type: string
-      version:
-        description: "Version to release (default: version from pyproject.toml)"
-        required: false
-        type: string
       steps:
-        description: "Steps to run (build,check,publish,verify)"
+        description: "Steps to run (comma separated)"
         required: false
-        type: string
         default: "build,check,publish,verify"
 
 permissions:
@@ -38,74 +32,26 @@ jobs:
   setup:
     runs-on: ubuntu-latest
     outputs:
-      targets: ${{ steps.parse_inputs.outputs.targets }}
-      steps: ${{ steps.parse_inputs.outputs.steps }}
-      package_name: ${{ steps.get_package_info.outputs.package_name }}
-      version: ${{ steps.get_package_info.outputs.version }}
-      force: ${{ steps.parse_inputs.outputs.force }}
+      package_name: ${{ inputs.package-name }}
+      version: ${{ inputs.version }}
+      targets: ${{ inputs.targets }}
+      force: ${{ inputs.force }}
+      steps: ${{ inputs.steps }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
-
-      - name: Setup Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.11"
-
-      - name: Install Poetry
+      - name: Set up job
         run: |
-          curl -sSL https://install.python-poetry.org | python3 -
-
-      - name: Parse inputs
-        id: parse_inputs
-        run: |
-          # Set targets
-          if [[ "${{ github.event_name }}" == "release" ]]; then
-            TARGETS="pypi,brew,apt,github"
-          else
-            TARGETS="${{ github.event.inputs.targets }}"
-          fi
-          echo "targets=$TARGETS" >> $GITHUB_OUTPUT
-
-          # Set steps
-          STEPS="${{ github.event.inputs.steps }}"
-          if [[ -z "$STEPS" ]]; then
-            STEPS="build,check,publish,verify"
-          fi
-          echo "steps=$STEPS" >> $GITHUB_OUTPUT
-
-          # Set force flag
-          echo "force=${{ github.event.inputs.force_update }}" >> $GITHUB_OUTPUT
-
-      - name: Get package info
-        id: get_package_info
-        run: |
-          # Get package name
-          if [[ -n "${{ github.event.inputs.package_name }}" ]]; then
-            PACKAGE_NAME="${{ github.event.inputs.package_name }}"
-          else
-            PACKAGE_NAME=$(poetry version | cut -d' ' -f1)
-          fi
-          echo "package_name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
-
-          # Get version
-          if [[ -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION=$(poetry version -s)
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Package name: ${{ inputs.package-name }}"
+          echo "Version: ${{ inputs.version }}"
+          echo "Targets: ${{ inputs.targets }}"
+          echo "Force: ${{ inputs.force }}"
+          echo "Steps: ${{ inputs.steps }}"
 
   release:
     needs: setup
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v4
 
       - name: Setup Python
         uses: actions/setup-python@v4
@@ -115,68 +61,21 @@ jobs:
       - name: Install Poetry
         run: |
           curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Install dependencies
-        run: |
-          # Install system dependencies
-          sudo apt-get update
-          sudo apt-get install -y dpkg-dev devscripts build-essential lintian
-
-          # Install Python dependencies
-          poetry install
+        run: poetry install
 
       - name: Run release steps
+        if: ${{ needs.setup.outputs.package_name }}
         env:
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PACKAGE_NAME: ${{ needs.setup.outputs.package_name }}
-          VERSION: ${{ needs.setup.outputs.version }}
           TARGETS: ${{ needs.setup.outputs.targets }}
-          STEPS: ${{ needs.setup.outputs.steps }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.setup.outputs.version }}
           FORCE: ${{ needs.setup.outputs.force }}
+          STEPS: ${{ needs.setup.outputs.steps }}
         run: |
-          # Function to run steps for a target
-          run_target_steps() {
-            local target=$1
-            
-            if [[ "$STEPS" == *"build"* ]]; then
-              echo "Running build for $target..."
-              ./py-release/$target/build --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
-            fi
-
-            if [[ "$STEPS" == *"check"* ]]; then
-              echo "Running check for $target..."
-              ./py-release/$target/check --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
-            fi
-
-            if [[ "$STEPS" == *"publish"* ]]; then
-              echo "Running publish for $target..."
-              EXTRA_ARGS=""
-              if [[ "$FORCE" == "true" ]]; then
-                EXTRA_ARGS="--force"
-              fi
-              ./py-release/$target/publish --package-name="$PACKAGE_NAME" --version="$VERSION" $EXTRA_ARGS || exit 1
-            fi
-
-            if [[ "$STEPS" == *"verify"* ]]; then
-              echo "Running verify for $target..."
-              ./py-release/$target/verify --package-name="$PACKAGE_NAME" --version="$VERSION" || exit 1
-            fi
-          }
-
-          # Run steps for each target
-          if [[ "$TARGETS" == *"pypi"* ]]; then
-            run_target_steps "pypi"
-          fi
-
-          if [[ "$TARGETS" == *"brew"* ]]; then
-            run_target_steps "brew"
-          fi
-
-          if [[ "$TARGETS" == *"apt"* ]]; then
-            run_target_steps "apt"
-          fi
-
-          if [[ "$TARGETS" == *"github"* ]]; then
-            run_target_steps "github"
-          fi 
+          ./py-release/github/build --package-name=$PACKAGE_NAME --version=$VERSION $([[ -n "$FORCE" ]] && echo "--force") && \
+          ./py-release/github/publish --package-name=$PACKAGE_NAME --version=$VERSION

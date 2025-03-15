@@ -9,3 +9,6 @@ brew "poetry"
 
 # Optional: For local testing of Homebrew formulas
 brew "brew-gem" 
+
+brew "docker"
+brew "act"
